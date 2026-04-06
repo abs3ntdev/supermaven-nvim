@@ -118,7 +118,7 @@ function Nes:show_cross_file_preview(edit)
   local win_width = math.min(max_width + 2, math.floor(vim.o.columns * 0.8))
   local win_height = math.min(#preview_lines, math.floor(vim.o.lines * 0.4))
 
-  local win = vim.api.nvim_open_win(buf, false, {
+  local ok, win = pcall(vim.api.nvim_open_win, buf, false, {
     relative = "cursor",
     row = 1,
     col = 0,
@@ -130,6 +130,14 @@ function Nes:show_cross_file_preview(edit)
     title_pos = "center",
     focusable = false,
   })
+  if not ok then
+    -- Window couldn't open (e.g. cursor at screen edge) — clean up the buffer
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
+    self.preview_buf = nil
+    return
+  end
   self.preview_win = win
 
   -- Apply line highlights
@@ -197,8 +205,8 @@ function Nes:render_delete(bufnr, edit)
   local start_line = edit.range.start.line
   local end_line = edit.range["end"].line
 
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
   for line = start_line, end_line do
-    local line_count = vim.api.nvim_buf_line_count(bufnr)
     if line >= 0 and line < line_count then
       local line_text = vim.api.nvim_buf_get_lines(bufnr, line, line + 1, false)[1] or ""
       vim.api.nvim_buf_set_extmark(bufnr, self.ns_id, line, 0, {
@@ -514,7 +522,8 @@ function Nes:on_cursor_moved(bufnr)
   local nes_config = config.nes or {}
 
   -- Skip distance-based clearing for cross-file edits (the edit line is in another file)
-  if not is_cross_file(bufnr, state.edit) then
+  local cross = is_cross_file(bufnr, state.edit)
+  if not cross then
     local edit_line = state.edit.range.start.line + 1
     local distance = math.abs(cursor[1] - edit_line)
     local distance_threshold = nes_config.distance_threshold or 40
@@ -524,13 +533,22 @@ function Nes:on_cursor_moved(bufnr)
     end
   end
 
-  -- Movement counting
+  -- Movement counting — skip for cross-file edits (user can't see the target)
+  -- and use a higher threshold for off-screen same-file edits
+  if cross then
+    return
+  end
   if state.last_cursor and (cursor[1] ~= state.last_cursor[1] or cursor[2] ~= state.last_cursor[2]) then
     state.cursor_moves = state.cursor_moves + 1
     state.last_cursor = cursor
     set_state(bufnr, state)
 
     local move_threshold = nes_config.move_count_threshold or 3
+    -- Off-screen edits get a more generous threshold since the user needs
+    -- time to navigate to the edit location
+    if is_off_screen(state.edit) then
+      move_threshold = math.max(move_threshold * 3, 10)
+    end
     if state.cursor_moves >= move_threshold then
       self:clear(bufnr)
     end

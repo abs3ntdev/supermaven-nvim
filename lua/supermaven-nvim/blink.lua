@@ -56,10 +56,9 @@ function source:get_completions(ctx, callback)
   local split = vim.split(completion_text, "\n", { plain = true })
   local label = label_text(split[1])
 
+  -- Always use PlainText — the completion text is not in snippet format
+  -- (no $0 tabstops etc.), so using Snippet would cause blink to misparse it.
   local insert_text_format = vim.lsp.protocol.InsertTextFormat.PlainText
-  if #split > 1 then
-    insert_text_format = vim.lsp.protocol.InsertTextFormat.Snippet
-  end
 
   local range = {
     start = {

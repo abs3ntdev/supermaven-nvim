@@ -173,7 +173,14 @@ end
 local function force_complete(output, dedent, params, completion_index)
   local result = finish_completion(output .. "\n", dedent, params, completion_index)
   if result == nil then
-    return { kind = "text", text = "", dedent = "", is_incomplete = false }
+    return {
+      kind = "text",
+      text = "",
+      dedent = "",
+      is_incomplete = false,
+      source_state_id = params.source_state_id,
+      completion_index = completion_index,
+    }
   else
     return result
   end
