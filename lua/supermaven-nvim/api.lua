@@ -2,6 +2,7 @@ local binary = require("supermaven-nvim.binary.binary_handler")
 local listener = require("supermaven-nvim.document_listener")
 local log = require("supermaven-nvim.logger")
 local u = require("supermaven-nvim.util")
+local nes = require("supermaven-nvim.nes")
 
 local loop = u.uv
 
@@ -32,6 +33,7 @@ M.stop = function()
     log:trace("Stopping Supermaven...")
   end
   listener.teardown()
+  nes:teardown()
   binary:stop_binary()
 end
 
@@ -79,6 +81,69 @@ M.clear_log = function()
   else
     log:warn("No log file found to remove!")
   end
+end
+
+--- NES API functions ---
+
+--- Check if there is a pending NES edit in the current buffer
+---@return boolean
+M.nes_has_edit = function()
+  return nes:has_edit()
+end
+
+--- Accept the pending NES edit and jump to its end
+---@return boolean true if an edit was applied
+M.nes_accept = function()
+  return nes:accept_and_goto()
+end
+
+--- Dismiss the pending NES edit in the current buffer
+M.nes_dismiss = function()
+  nes:dismiss()
+end
+
+--- Jump cursor to the pending NES edit location
+---@return boolean true if cursor was moved
+M.nes_jump = function()
+  return nes:jump_to_edit()
+end
+
+--- Statusline API ---
+
+--- Get the current Supermaven status suitable for statusline display.
+--- Returns a table with fields: running, service_tier, service_display, task_status, active_repo
+---@return { running: boolean, service_tier: string|nil, service_display: string|nil, task_status: string|nil, active_repo: string|nil }
+M.get_status = function()
+  return {
+    running = binary:is_running(),
+    service_tier = binary.service_tier,
+    service_display = binary.service_display,
+    task_status = binary.task_status,
+    active_repo = binary.active_repo,
+  }
+end
+
+--- Get a short string suitable for direct statusline use.
+--- Examples: " Pro", " Free", " Off"
+---@return string
+M.get_status_string = function()
+  if not binary:is_running() then
+    return "Supermaven Off"
+  end
+  local display = binary.service_display
+  if display and display ~= "" then
+    return "Supermaven " .. display
+  end
+  return "Supermaven"
+end
+
+--- Check if Supermaven is currently completing (has pending inline completions)
+---@return boolean
+M.is_completing = function()
+  if not binary:is_running() then
+    return false
+  end
+  return binary.wants_polling == true
 end
 
 return M

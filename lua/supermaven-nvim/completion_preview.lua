@@ -5,6 +5,7 @@ local CompletionPreview = {
   ns_id = vim.api.nvim_create_namespace("supermaven"),
   suggestion_group = "Comment",
   disable_inline_completion = false,
+  prior_keymaps = {},
 }
 
 CompletionPreview.__index = CompletionPreview
@@ -138,6 +139,32 @@ function CompletionPreview:get_inlay_instance()
   return self.inlay_instance
 end
 
+--- Save an existing keymap before overriding it, so we can fall through
+---@param mode string
+---@param lhs string
+function CompletionPreview.save_prior_keymap(mode, lhs)
+  local existing = vim.fn.maparg(lhs, mode, false, true)
+  if existing and existing.lhs then
+    CompletionPreview.prior_keymaps[mode .. ":" .. lhs] = existing
+  end
+end
+
+--- Fall through to the original keymap or feed the raw key
+---@param mode string
+---@param lhs string
+local function fallback_keymap(mode, lhs)
+  local key = mode .. ":" .. lhs
+  local prior = CompletionPreview.prior_keymaps[key]
+  if prior and prior.callback then
+    prior.callback()
+  elseif prior and prior.rhs and prior.rhs ~= "" then
+    local rhs = vim.api.nvim_replace_termcodes(prior.rhs, true, false, true)
+    vim.api.nvim_feedkeys(rhs, "n", false)
+  else
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(lhs, true, false, true), "n", true)
+  end
+end
+
 function CompletionPreview.on_accept_suggestion(is_partial)
   local accept_completion = CompletionPreview:accept_completion_text(is_partial)
   if accept_completion ~= nil and accept_completion.is_active then
@@ -167,7 +194,9 @@ function CompletionPreview.on_accept_suggestion(is_partial)
     local new_cursor_pos = { cursor[1] + lines, cursor[2] + #last_line + 1 }
     vim.api.nvim_win_set_cursor(0, new_cursor_pos)
   else
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Tab>", true, false, true), "n", true)
+    local config = require("supermaven-nvim.config")
+    local accept_key = config.keymaps and config.keymaps.accept_suggestion or "<Tab>"
+    fallback_keymap("i", accept_key)
   end
 end
 

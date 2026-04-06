@@ -22,6 +22,7 @@ M.setup = function()
   })
 
   vim.api.nvim_create_autocmd({ "BufEnter" }, {
+    group = M.augroup,
     callback = function(_)
       local ok, api = pcall(require, "supermaven-nvim.api")
       if not ok then

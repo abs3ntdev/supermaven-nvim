@@ -1,4 +1,5 @@
 local u = require("supermaven-nvim.util")
+local log = require("supermaven-nvim.logger")
 local M = {}
 
 local function find_first_non_empty_newline(s)
@@ -30,21 +31,6 @@ local function is_all_dust(line, dust_strings)
     end
   end
 
-  return true
-end
-
-local function is_all_whitespace_and_closing_paren(original_line)
-  local line = original_line
-  while #line > 0 do
-    local start_length = #line
-    line = u.trim_start(line)
-    if line:sub(1, 1) == ")" then
-      line = line:sub(2)
-    end
-    if #line == start_length then
-      return false
-    end
-  end
   return true
 end
 
@@ -211,7 +197,7 @@ function M.derive_completion(completion, params)
     end
     if #delete_lines > 0 and response_item.kind ~= "delete" then
       return {
-        type = "delete",
+        kind = "delete",
         lines = delete_lines,
         completion_index = completion_index,
         source_state_id = params.source_state_id,
@@ -227,22 +213,26 @@ function M.derive_completion(completion, params)
     elseif response_item.kind == "dedent" then
       dedent = dedent .. response_item.text
     elseif response_item.kind == "jump" then
+      log:debug(string.format("textual: saw jump response item -> fileName=%s lineNumber=%s output_empty=%s",
+        tostring(response_item.fileName), tostring(response_item.lineNumber), tostring(u.trim(output) == "")))
       if u.trim(output) ~= "" then
-        return {
-          kind = "jump",
-          file_name = response_item.fileName,
-          line_number = response_item.lineNumber,
-          verify = response_item.verify,
-          precede = response_item.precede,
-          follow = response_item.follow,
-          completion_index = completion_index + 1,
-          source_state_id = params.source_state_id,
-          is_create_file = response_item.isCreateFile,
-        }
-      else
-        break
+        -- There's pending text output — flush it first, the jump will be picked up on the next poll
+        return force_complete(output, dedent, params, completion_index)
       end
+      -- No pending text — return the jump directly
+      return {
+        kind = "jump",
+        file_name = response_item.fileName,
+        line_number = response_item.lineNumber,
+        verify = response_item.verify,
+        precede = response_item.precede,
+        follow = response_item.follow,
+        completion_index = completion_index + 1,
+        source_state_id = params.source_state_id,
+        is_create_file = response_item.isCreateFile,
+      }
     elseif response_item.kind == "delete" then
+      log:debug(string.format("textual: saw delete response item -> verify=%s", tostring(response_item.verify)))
       if u.trim(output) ~= "" then
         return force_complete(output, dedent, params, completion_index)
       end

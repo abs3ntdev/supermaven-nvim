@@ -70,8 +70,8 @@ function BinaryFetcher:discover_binary_url()
     response = vim.fn.system({ "curl", "-s", url })
   end
 
-  local json = vim.fn.json_decode(response)
-  if json == nil then
+  local ok, json = pcall(vim.json.decode, response)
+  if not ok or json == nil then
     log:error("Unable to find download URL for Supermaven binary")
     return nil
   end

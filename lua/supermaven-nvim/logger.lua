@@ -1,9 +1,13 @@
 ---@diagnostic disable: missing-parameter
 local c = require("supermaven-nvim.config")
-local loop = vim.uv or vim.loop
+local loop = vim.uv
 
 ---@class Log
 local log = {}
+
+log.__notify_fmt = function(message)
+  return string.format("[supermaven-nvim] %s", message)
+end
 
 ---@alias LogLevel "off" | "trace" | "debug" | "info" | "warn" | "error"
 
@@ -17,19 +21,17 @@ local level_values = {
 }
 
 local join_path = function(...)
-  local is_windows = loop.os_uname().version:match("Windows") -- could be "Windows" or "Windows_NT"
+  local is_windows = loop.os_uname().version:match("Windows")
   local path_sep = is_windows and "\\" or "/"
-  if vim.version().minor >= 10 then
-    return table.concat(vim.iter({ ... }):flatten():totable(), path_sep):gsub(path_sep .. "+", path_sep)
-  end
-  return table.concat(vim.tbl_flatten({ ... }), path_sep):gsub(path_sep .. "+", path_sep)
+  return table.concat(vim.iter({ ... }):flatten():totable(), path_sep):gsub(path_sep .. "+", path_sep)
 end
 
 --- Creates a log file if it doesn't exist
+---@return boolean true if the log file exists or was created
 local create_log_file = function()
   local log_path = log:get_log_path()
   if log_path ~= nil then
-    return
+    return true
   end
   -- If the cache directory doesn't exist, create it
   if vim.fn.isdirectory(vim.fn.stdpath("cache")) == 0 then
@@ -46,9 +48,10 @@ local create_log_file = function()
   local file = io.open(log_path, "w")
   if file == nil then
     error("Failed to create log file: " .. log_path)
-    return
+    return false
   end
   file:close()
+  return true
 end
 
 --- Writes a log entry to the log file
@@ -74,12 +77,6 @@ end
 ---@param msg string: The log message
 function log:add_entry(level, msg)
   local conf = c.config
-
-  if not self.__notify_fmt then
-    self.__notify_fmt = function(message)
-      return string.format(string.format("[supermaven-nvim] %s", message))
-    end
-  end
 
   if conf.log_level == "off" or level_values[conf.log_level] == nil then
     return
@@ -152,5 +149,4 @@ function log:trace(msg)
   self:add_entry("trace", msg)
 end
 
-setmetatable({}, log)
 return log

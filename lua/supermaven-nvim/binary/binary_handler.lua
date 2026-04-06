@@ -7,8 +7,6 @@ local preview = require("supermaven-nvim.completion_preview")
 local binary_fetcher = require("supermaven-nvim.binary.binary_fetcher")
 local log = require("supermaven-nvim.logger")
 
-local binary_path = binary_fetcher:fetch_binary()
-
 local BinaryLifecycle = {
   state_map = {},
   current_state_id = 0,
@@ -20,22 +18,51 @@ local BinaryLifecycle = {
   changed_document_list = {},
   last_state = nil,
   dust_strings = {},
+  poll_timer = nil,
+  binary_path = nil,
+  -- Statusline state
+  service_tier = nil, ---@type string | nil  e.g. "free", "pro"
+  service_display = nil, ---@type string | nil  human-readable tier label from the binary
+  task_status = nil, ---@type string | nil  current task status from the binary
+  active_repo = nil, ---@type string | nil  currently active repo path
 }
 
 BinaryLifecycle.HARD_SIZE_LIMIT = 10e6
 
-local timer = loop.new_timer()
-timer:start(
-  0,
-  25,
-  vim.schedule_wrap(function()
-    if BinaryLifecycle.wants_polling then
-      BinaryLifecycle:poll_once()
+function BinaryLifecycle:start_poll_timer()
+  if self.poll_timer then
+    return
+  end
+  self.poll_timer = loop.new_timer()
+  self.poll_timer:start(
+    0,
+    25,
+    vim.schedule_wrap(function()
+      if self.wants_polling then
+        self:poll_once()
+      end
+    end)
+  )
+end
+
+function BinaryLifecycle:stop_poll_timer()
+  if self.poll_timer then
+    self.poll_timer:stop()
+    if not self.poll_timer:is_closing() then
+      self.poll_timer:close()
     end
-  end)
-)
+    self.poll_timer = nil
+  end
+end
 
 function BinaryLifecycle:start_binary()
+  if not self.binary_path then
+    self.binary_path = binary_fetcher:fetch_binary()
+    if not self.binary_path then
+      log:error("Failed to fetch Supermaven binary. Cannot start.")
+      return
+    end
+  end
   self.stdin = loop.new_pipe(false)
   self.stdout = loop.new_pipe(false)
   self.stderr = loop.new_pipe(false)
@@ -43,7 +70,7 @@ function BinaryLifecycle:start_binary()
   self.last_path = nil
   self.last_context = nil
   self.wants_polling = false
-  self.handle = loop.spawn(binary_path, {
+  self.handle = loop.spawn(self.binary_path, {
     args = {
       "stdio",
     },
@@ -54,8 +81,10 @@ function BinaryLifecycle:start_binary()
     self.handle = nil
   end)
   if not self.handle then
-    log:debug("Starting binary")
+    log:error("Failed to start sm-agent binary")
+    return
   end
+  self:start_poll_timer()
   self:read_loop()
   self:greeting_message()
 end
@@ -65,6 +94,8 @@ function BinaryLifecycle:is_running()
 end
 
 function BinaryLifecycle:stop_binary()
+  self:stop_poll_timer()
+  self.wants_polling = false
   if self:is_running() then
     self.handle:kill(loop.constants.SIGTERM)
     self.handle:close()
@@ -117,9 +148,15 @@ function BinaryLifecycle:check_process()
 
   if self.handle ~= nil then
     self.handle:close()
+    self.handle = nil
   end
 
   self:start_binary()
+  -- Re-setup document listener after auto-restart
+  local ok, listener = pcall(require, "supermaven-nvim.document_listener")
+  if ok and listener.augroup == nil then
+    listener.setup()
+  end
 end
 
 function BinaryLifecycle:same_context(context)
@@ -191,10 +228,12 @@ function BinaryLifecycle:process_message(message)
   elseif message.kind == "popup" then
     -- unused
   elseif message.kind == "task_status" then
-    -- unused, no status bar is displayed
+    self.task_status = message.status or message.taskStatus or nil
   elseif message.kind == "active_repo" then
-    -- unused, no status bar is displayed
+    self.active_repo = message.repo or message.activeRepo or nil
   elseif message.kind == "service_tier" then
+    self.service_tier = message.tier or message.serviceTier or nil
+    self.service_display = message.display or nil
     if not self.service_message_displayed then
       if message.display then
         log:trace("Supermaven " .. message.display .. " is running.")
@@ -317,8 +356,12 @@ function BinaryLifecycle:poll_once()
   end
 
   if maybe_completion.kind == "jump" then
+    log:debug(string.format("NES: received jump completion -> file=%s line=%s", maybe_completion.file_name or "(current)", tostring(maybe_completion.line_number)))
+    self:handle_nes_jump(buffer, maybe_completion)
     return
   elseif maybe_completion.kind == "delete" then
+    log:debug(string.format("NES: received delete completion -> %d lines", #(maybe_completion.lines or {})))
+    self:handle_nes_delete(buffer, maybe_completion)
     return
   elseif maybe_completion.kind == "skip" then
     return
@@ -510,12 +553,113 @@ function BinaryLifecycle:shares_common_prefix(str1, str2)
   return true
 end
 
-function BinaryLifecycle:show_activation_message()
-  if self.activate_url ~= nil then
-    log:info([[Thank you for installing Supermaven!
-
-Use :SupermavenUsePro to set up Supermaven Pro, or use the command :SupermavenUseFree to use the Free Tier]])
+--- Handle a delete completion by dispatching it to the NES module
+---@param buffer integer
+---@param completion DeleteCompletion
+function BinaryLifecycle:handle_nes_delete(buffer, completion)
+  local nes_config = config.nes or {}
+  if not nes_config.enabled then
+    return
   end
+
+  local nes = require("supermaven-nvim.nes")
+  local cursor = self.cursor
+  if not cursor then
+    return
+  end
+
+  local start_line = cursor[1] -- 1-indexed from nvim, NES edit uses 0-indexed
+  local num_lines = #completion.lines
+  if num_lines == 0 then
+    return
+  end
+
+  ---@type NesEdit
+  local edit = {
+    kind = "delete",
+    range = {
+      start = { line = start_line - 1, character = 0 },
+      ["end"] = { line = start_line - 1 + num_lines - 1, character = 0 },
+    },
+    new_text = "",
+    old_text = table.concat(completion.lines, "\n"),
+  }
+
+  vim.schedule(function()
+    nes:show(buffer, edit)
+  end)
+end
+
+--- Handle a jump completion by dispatching it to the NES module
+---@param buffer integer
+---@param completion JumpCompletion
+function BinaryLifecycle:handle_nes_jump(buffer, completion)
+  local nes_config = config.nes or {}
+  if not nes_config.enabled then
+    return
+  end
+
+  local nes = require("supermaven-nvim.nes")
+
+  -- The jump response tells us about an edit at another location
+  local target_line = completion.line_number or 0
+  local new_text = table.concat(completion.follow or {}, "\n")
+
+  if new_text == "" and (not completion.precede or #completion.precede == 0) then
+    return
+  end
+
+  -- If we have precede lines, this is a replacement at that location
+  local old_text = table.concat(completion.precede or {}, "\n")
+  local num_precede = completion.precede and #completion.precede or 0
+
+  ---@type NesEdit
+  local edit
+  if num_precede > 0 and new_text ~= "" then
+    edit = {
+      kind = "replace",
+      range = {
+        start = { line = target_line, character = 0 },
+        ["end"] = { line = target_line + num_precede - 1, character = #(completion.precede[num_precede] or "") },
+      },
+      new_text = new_text,
+      old_text = old_text,
+    }
+  elseif new_text ~= "" then
+    edit = {
+      kind = "insert",
+      range = {
+        start = { line = target_line, character = 0 },
+        ["end"] = { line = target_line, character = 0 },
+      },
+      new_text = new_text,
+      old_text = "",
+    }
+  elseif num_precede > 0 then
+    edit = {
+      kind = "delete",
+      range = {
+        start = { line = target_line, character = 0 },
+        ["end"] = { line = target_line + num_precede - 1, character = #(completion.precede[num_precede] or "") },
+      },
+      new_text = "",
+      old_text = old_text,
+    }
+  else
+    return
+  end
+
+  -- Attach cross-file metadata to the edit
+  if completion.file_name and completion.file_name ~= "" then
+    edit.file_name = completion.file_name
+  end
+  if completion.is_create_file then
+    edit.is_create_file = true
+  end
+
+  vim.schedule(function()
+    nes:show(buffer, edit)
+  end)
 end
 
 function BinaryLifecycle:use_free_version()

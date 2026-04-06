@@ -3,6 +3,7 @@ local log = require("supermaven-nvim.logger")
 local config = require("supermaven-nvim.config")
 local commands = require("supermaven-nvim.commands")
 local api = require("supermaven-nvim.api")
+local nes = require("supermaven-nvim.nes")
 
 local M = {}
 
@@ -14,6 +15,7 @@ M.setup = function(args)
   elseif not config.disable_keymaps then
     if config.keymaps.accept_suggestion ~= nil then
       local accept_suggestion_key = config.keymaps.accept_suggestion
+      completion_preview.save_prior_keymap("i", accept_suggestion_key)
       vim.keymap.set(
         "i",
         accept_suggestion_key,
@@ -24,6 +26,7 @@ M.setup = function(args)
 
     if config.keymaps.accept_word ~= nil then
       local accept_word_key = config.keymaps.accept_word
+      completion_preview.save_prior_keymap("i", accept_word_key)
       vim.keymap.set(
         "i",
         accept_word_key,
@@ -34,11 +37,13 @@ M.setup = function(args)
 
     if config.keymaps.clear_suggestion ~= nil then
       local clear_suggestion_key = config.keymaps.clear_suggestion
+      completion_preview.save_prior_keymap("i", clear_suggestion_key)
       vim.keymap.set("i", clear_suggestion_key, completion_preview.on_dispose_inlay, { noremap = true, silent = true })
     end
   end
 
   commands.setup()
+  nes:setup()
 
   local cmp_ok, cmp = pcall(require, "cmp")
   if cmp_ok then

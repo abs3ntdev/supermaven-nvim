@@ -18,7 +18,7 @@
 ---@field file_name string
 ---@field line_number integer
 ---@field verify string | nil
----@field precedede string[]
+---@field precede string[]
 ---@field follow string[]
 ---@field is_create_file boolean
 
@@ -54,7 +54,7 @@
 
 ---@class DeleteResponse
 ---@field kind "delete"
----@field text string
+---@field verify string
 
 ---@class DedentResponse
 ---@field kind "dedent"
@@ -119,3 +119,19 @@
 ---@field path string
 ---@field content string
 ---@field cursor CursorUpdateMessage
+
+--- NES (Next Edit Suggestion) types
+---@class NesEdit
+---@field kind "insert" | "delete" | "replace"
+---@field range { start: { line: integer, character: integer }, ["end"]: { line: integer, character: integer } }
+---@field new_text string
+---@field old_text string
+---@field file_name string | nil Target file path for cross-file edits (nil = current buffer)
+---@field is_create_file boolean | nil Whether this edit creates a new file
+
+---@class NesState
+---@field edit NesEdit | nil
+---@field bufnr integer
+---@field ns_id integer
+---@field cursor_moves integer
+---@field last_cursor { [1]: integer, [2]: integer } | nil

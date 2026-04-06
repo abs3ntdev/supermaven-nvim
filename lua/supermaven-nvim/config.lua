@@ -4,6 +4,10 @@ local default_config = {
     clear_suggestion = "<C-]>",
     accept_word = "<C-j>",
   },
+  color = {
+    suggestion_color = nil,
+    cterm = nil,
+  },
   ignore_filetypes = {},
   disable_inline_completion = false,
   disable_keymaps = false,
@@ -11,6 +15,16 @@ local default_config = {
     return false
   end,
   log_level = "info",
+  nes = {
+    enabled = false,
+    keymaps = {
+      accept = "<Tab>",
+      dismiss = "<C-]>",
+      next = "]s",
+    },
+    move_count_threshold = 3,
+    distance_threshold = 40,
+  },
 }
 
 local M = {
