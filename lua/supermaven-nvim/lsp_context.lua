@@ -95,6 +95,27 @@ local function extract_paths(results)
   return paths
 end
 
+--- Check if any LSP client attached to a buffer supports a given method
+---@param bufnr integer
+---@param method string
+---@return boolean
+local function has_capability(bufnr, method)
+  local clients = vim.lsp.get_clients({ bufnr = bufnr, method = method })
+  return #clients > 0
+end
+
+--- Safely send an LSP request only if a capable client exists
+---@param bufnr integer
+---@param method string
+---@param params table
+---@param callback fun(results: table)
+local function safe_request(bufnr, method, params, callback)
+  if not has_capability(bufnr, method) then
+    return
+  end
+  pcall(vim.lsp.buf_request_all, bufnr, method, params, callback)
+end
+
 --- Query LSP for definitions/type definitions of the symbol under cursor
 --- and send those files to the agent
 ---@param bufnr integer
@@ -115,7 +136,7 @@ local function query_definitions(bufnr, cursor)
     if not results then
       return
     end
-    for client_id, result in pairs(results) do
+    for _, result in pairs(results) do
       if result and result.result then
         local items = result.result
         -- Normalize: single result vs array
@@ -133,31 +154,25 @@ local function query_definitions(bufnr, cursor)
     end
   end
 
-  -- Query textDocument/definition
-  local def_ok, def_cancel = pcall(vim.lsp.buf_request_all, bufnr, "textDocument/definition", params, function(results)
-    process_results(results)
-  end)
-
-  -- Query textDocument/typeDefinition
-  local td_ok, td_cancel =
-    pcall(vim.lsp.buf_request_all, bufnr, "textDocument/typeDefinition", params, function(results)
-      process_results(results)
-    end)
+  safe_request(bufnr, "textDocument/definition", params, process_results)
+  safe_request(bufnr, "textDocument/typeDefinition", params, process_results)
 end
 
 --- Query LSP for document symbols and send definition files for imported types
 ---@param bufnr integer
 local function query_document_symbols(bufnr)
+  if not has_capability(bufnr, "textDocument/documentSymbol") then
+    return
+  end
+
   local clients = vim.lsp.get_clients({ bufnr = bufnr })
   if #clients == 0 then
     return
   end
 
-  -- Use textDocument/documentSymbol to find imports, then resolve their definitions
-  -- This is more efficient than querying every symbol individually
   local params = { textDocument = vim.lsp.util.make_text_document_params(bufnr) }
 
-  pcall(vim.lsp.buf_request_all, bufnr, "textDocument/documentSymbol", params, function(results)
+  safe_request(bufnr, "textDocument/documentSymbol", params, function(results)
     if not results then
       return
     end
@@ -165,7 +180,6 @@ local function query_document_symbols(bufnr)
     local files_sent = 0
     local current_file = vim.api.nvim_buf_get_name(bufnr)
 
-    -- For each top-level symbol that looks like an import/require, try to resolve it
     for _, result in pairs(results) do
       if result and result.result then
         for _, symbol in ipairs(result.result) do
@@ -176,39 +190,32 @@ local function query_document_symbols(bufnr)
           -- SymbolKind: 2=Module, 3=Namespace, 5=Class, 11=Function, 13=Variable
           local kind = symbol.kind
           if kind == 2 or kind == 3 or kind == 5 then
-            -- Try to resolve the definition of this symbol
             local range = symbol.selectionRange or symbol.range
             if range then
               local sym_params = {
                 textDocument = vim.lsp.util.make_text_document_params(bufnr),
                 position = range.start,
               }
-              pcall(
-                vim.lsp.buf_request_all,
-                bufnr,
-                "textDocument/definition",
-                sym_params,
-                function(def_results)
-                  if not def_results then
-                    return
-                  end
-                  for _, def_result in pairs(def_results) do
-                    if def_result and def_result.result then
-                      local items = def_result.result
-                      if items.uri or items.targetUri then
-                        items = { items }
-                      end
-                      local paths = extract_paths(items)
-                      for _, path in ipairs(paths) do
-                        if path ~= current_file and files_sent < M.MAX_FILES_PER_TRIGGER then
-                          send_file(path)
-                          files_sent = files_sent + 1
-                        end
+              safe_request(bufnr, "textDocument/definition", sym_params, function(def_results)
+                if not def_results then
+                  return
+                end
+                for _, def_result in pairs(def_results) do
+                  if def_result and def_result.result then
+                    local items = def_result.result
+                    if items.uri or items.targetUri then
+                      items = { items }
+                    end
+                    local paths = extract_paths(items)
+                    for _, path in ipairs(paths) do
+                      if path ~= current_file and files_sent < M.MAX_FILES_PER_TRIGGER then
+                        send_file(path)
+                        files_sent = files_sent + 1
                       end
                     end
                   end
                 end
-              )
+              end)
             end
           end
         end
