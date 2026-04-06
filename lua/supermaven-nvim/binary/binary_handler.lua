@@ -246,7 +246,9 @@ function BinaryLifecycle:process_message(message)
   elseif message.kind == "activation_success" then
     self.activate_url = nil
     self.activation_opened = false
-    log:info("Supermaven was activated successfully.")
+    vim.schedule(function()
+      vim.notify("[supermaven-nvim] Supermaven was activated successfully.", vim.log.levels.INFO)
+    end)
     vim.schedule(function()
       self:close_popup()
     end)
