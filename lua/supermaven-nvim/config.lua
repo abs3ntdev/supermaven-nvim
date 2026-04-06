@@ -32,6 +32,9 @@ local default_config = {
     move_count_threshold = 3,
     distance_threshold = 40,
   },
+  lsp_context = {
+    enabled = false,
+  },
 }
 
 local M = {

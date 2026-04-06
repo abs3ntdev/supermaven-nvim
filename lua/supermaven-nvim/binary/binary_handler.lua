@@ -87,6 +87,16 @@ function BinaryLifecycle:start_binary()
   self:start_poll_timer()
   self:read_loop()
   self:greeting_message()
+  -- Give the agent immediate context about open buffers and the workspace
+  vim.schedule(function()
+    self:sync_loaded_buffers()
+    self:scan_workspace()
+    -- Reset LSP context cache so definitions are re-sent after restart
+    local lsp_ok, lsp_context = pcall(require, "supermaven-nvim.lsp_context")
+    if lsp_ok then
+      lsp_context.reset()
+    end
+  end)
 end
 
 function BinaryLifecycle:is_running()
@@ -139,6 +149,12 @@ function BinaryLifecycle:on_update(buffer, file_name, event_type)
   self.last_path = file_name
   self.last_text = buffer_text
   self.last_context = context
+
+  -- Enrich agent context with LSP definitions (debounced, async)
+  local lsp_ok, lsp_context = pcall(require, "supermaven-nvim.lsp_context")
+  if lsp_ok then
+    lsp_context.enrich(buffer, cursor)
+  end
 end
 
 function BinaryLifecycle:check_process()
@@ -775,6 +791,67 @@ function BinaryLifecycle:document_changed(full_path, buffer_text)
     path = full_path,
   }
   self:send_json(outgoing_message)
+end
+
+--- Send contents of all currently loaded buffers to the agent.
+--- Called after binary start/restart so the agent has immediate context
+--- about the user's working set.
+function BinaryLifecycle:sync_loaded_buffers()
+  if not self:is_running() then
+    return
+  end
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].buflisted then
+      local name = vim.api.nvim_buf_get_name(bufnr)
+      if name ~= "" and vim.bo[bufnr].buftype == "" then
+        local ft = vim.bo[bufnr].filetype
+        if not (config.ignore_filetypes[ft] or vim.tbl_contains(config.ignore_filetypes, ft)) then
+          local ok, text = pcall(u.get_text, bufnr)
+          if ok and #text <= self.HARD_SIZE_LIMIT then
+            self:document_changed(name, text)
+          end
+        end
+      end
+    end
+  end
+end
+
+--- Inform the agent about workspace files it should be aware of.
+--- Walks the git working tree (or cwd) and sends inform_file_changed
+--- for source files, so the agent can index them server-side.
+--- Runs asynchronously to avoid blocking startup.
+function BinaryLifecycle:scan_workspace()
+  if not self:is_running() then
+    return
+  end
+
+  -- Determine workspace root: git root or cwd
+  local root = vim.fn.systemlist("git rev-parse --show-toplevel 2>/dev/null")[1]
+  if vim.v.shell_error ~= 0 or not root or root == "" then
+    root = vim.fn.getcwd()
+  end
+
+  -- Use git ls-files if in a git repo for speed + respects .gitignore
+  local cmd = { "git", "-C", root, "ls-files", "--cached", "--others", "--exclude-standard" }
+  vim.system(cmd, { text = true }, function(result)
+    if result.code ~= 0 or not result.stdout then
+      return
+    end
+    vim.schedule(function()
+      if not self:is_running() then
+        return
+      end
+      local files = vim.split(result.stdout, "\n", { plain = true, trimempty = true })
+      for _, relative_path in ipairs(files) do
+        local full_path = root .. "/" .. relative_path
+        self:send_json({
+          kind = "inform_file_changed",
+          path = full_path,
+        })
+      end
+      log:debug(string.format("Workspace scan: informed agent about %d files", #files))
+    end)
+  end)
 end
 
 return BinaryLifecycle

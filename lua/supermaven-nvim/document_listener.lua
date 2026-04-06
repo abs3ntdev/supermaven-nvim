@@ -46,6 +46,22 @@ M.setup = function()
     end,
   })
 
+  -- Inform the agent about newly opened files immediately
+  vim.api.nvim_create_autocmd({ "BufReadPost" }, {
+    group = M.augroup,
+    callback = function(event)
+      local file_name = event["file"]
+      local buffer = event["buf"]
+      if not file_name or file_name == "" or not buffer then
+        return
+      end
+      if not vim.api.nvim_buf_is_valid(buffer) then
+        return
+      end
+      binary:on_update(buffer, file_name, "text_changed")
+    end,
+  })
+
   vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
     group = M.augroup,
     callback = function(event)
