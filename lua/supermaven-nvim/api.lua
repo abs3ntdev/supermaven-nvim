@@ -111,7 +111,7 @@ end
 --- Statusline API ---
 
 --- Get the current Supermaven status suitable for statusline display.
----@return { running: boolean, service_tier: string|nil, service_display: string|nil, task_status: string|nil, active_repo: string|nil, is_connected: boolean|nil, connection_status_text: string|nil, disabled: boolean, disable_reason: string|nil, user_email: string|nil }
+---@return { running: boolean, service_tier: string|nil, service_display: string|nil, task_status: string|nil, active_repo: string|nil, is_connected: boolean|nil, connection_status_text: string|nil, user_email: string|nil }
 M.get_status = function()
   return {
     running = binary:is_running(),
@@ -121,8 +121,6 @@ M.get_status = function()
     active_repo = binary.active_repo,
     is_connected = binary.is_connected,
     connection_status_text = binary.connection_status_text,
-    disabled = binary.disabled or false,
-    disable_reason = binary.disable_reason,
     user_email = binary.user_email,
   }
 end
@@ -134,9 +132,7 @@ M.get_status_string = function()
   if not binary:is_running() then
     return "Supermaven Off"
   end
-  if binary.disabled then
-    return "Supermaven Disabled"
-  end
+
   if binary.is_connected == false then
     return "Supermaven Disconnected"
   end

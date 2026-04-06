@@ -27,8 +27,7 @@ local BinaryLifecycle = {
   active_repo = nil, ---@type string | nil  currently active repo path
   is_connected = nil, ---@type boolean | nil  whether the binary has an active server connection
   connection_status_text = nil, ---@type string | nil  human-readable connection status from the binary
-  disabled = false, ---@type boolean  whether the server has remotely disabled completions
-  disable_reason = nil, ---@type string | nil  reason the server disabled completions
+
   user_email = nil, ---@type string | nil  authenticated user email
 }
 
@@ -274,12 +273,7 @@ function BinaryLifecycle:process_message(message)
       self.service_tier = self.service_tier or message.tier
     end
   elseif message.kind == "set_v2" then
-    -- Track state for statusline but don't gate completions
-    if message.key == "disabled" then
-      self.disabled = message.value == "true"
-    elseif message.key == "disable_reason" then
-      self.disable_reason = message.value
-    end
+    -- ignored; the binary sends unreliable disabled state
   elseif message.kind == "apology" then
     -- legacy
   elseif message.kind == "set" then
