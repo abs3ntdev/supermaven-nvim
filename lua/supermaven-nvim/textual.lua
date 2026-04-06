@@ -206,6 +206,7 @@ function M.derive_completion(completion, params)
       return {
         kind = "delete",
         lines = delete_lines,
+        is_incomplete = false,
         completion_index = completion_index,
         source_state_id = params.source_state_id,
       }
@@ -234,6 +235,7 @@ function M.derive_completion(completion, params)
         verify = response_item.verify,
         precede = response_item.precede,
         follow = response_item.follow,
+        is_incomplete = false,
         completion_index = completion_index + 1,
         source_state_id = params.source_state_id,
         is_create_file = response_item.isCreateFile,
@@ -254,6 +256,7 @@ function M.derive_completion(completion, params)
       return {
         kind = "skip",
         n = response_item.n,
+        is_incomplete = false,
         completion_index = completion_index + 1,
         source_state_id = params.source_state_id,
       }

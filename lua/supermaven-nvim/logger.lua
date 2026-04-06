@@ -107,7 +107,7 @@ end
 ---@param msg string: The log message
 function log:warn(msg)
   self:add_entry("warn", msg)
-  vim.api.nvim_notify(self.__notify_fmt(msg), vim.log.levels.WARN, { title = "Supermaven" })
+  vim.notify(self.__notify_fmt(msg), vim.log.levels.WARN)
 end
 
 --- Logs an error message to the log file
@@ -115,7 +115,7 @@ end
 ---@param msg string: The log message
 function log:error(msg)
   self:add_entry("error", msg)
-  vim.api.nvim_notify(self.__notify_fmt(msg), vim.log.levels.ERROR, { title = "Supermaven" })
+  vim.notify(self.__notify_fmt(msg), vim.log.levels.ERROR)
 end
 
 --- Logs an informational message to the log file
