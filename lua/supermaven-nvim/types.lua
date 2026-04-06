@@ -120,6 +120,45 @@
 ---@field content string
 ---@field cursor CursorUpdateMessage
 
+--- Incoming binary messages (beyond response/metadata/activation)
+
+---@class ConnectionStatusMessage
+---@field kind "connection_status"
+---@field is_connected boolean
+---@field status_text string | nil
+
+---@class SetV2Message
+---@field kind "set_v2"
+---@field key string     e.g. "disabled", "disable_reason"
+---@field value string
+
+---@class UserStatusMessage
+---@field kind "user_status"
+---@field tier string | nil
+---@field email string | nil
+
+---@class PopupAction
+---@field kind "open_url" | "logout" | "no_op"
+---@field label string | nil
+---@field url string | nil
+
+---@class PopupMessage
+---@field kind "popup"
+---@field message string | nil
+---@field text string | nil
+---@field actions PopupAction[] | nil
+
+--- Outgoing passthrough messages
+
+---@class TextAcceptedMessage
+---@field kind "text_accepted"
+---@field path string
+---@field text string
+
+---@class PassthroughToServerMessage
+---@field kind "passthrough_to_server"
+---@field passthrough TextAcceptedMessage
+
 --- NES (Next Edit Suggestion) types
 ---@class NesEdit
 ---@field kind "insert" | "delete" | "replace"

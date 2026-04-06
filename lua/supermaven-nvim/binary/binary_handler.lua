@@ -25,6 +25,11 @@ local BinaryLifecycle = {
   service_display = nil, ---@type string | nil  human-readable tier label from the binary
   task_status = nil, ---@type string | nil  current task status from the binary
   active_repo = nil, ---@type string | nil  currently active repo path
+  is_connected = nil, ---@type boolean | nil  whether the binary has an active server connection
+  connection_status_text = nil, ---@type string | nil  human-readable connection status from the binary
+  disabled = false, ---@type boolean  whether the server has remotely disabled completions
+  disable_reason = nil, ---@type string | nil  reason the server disabled completions
+  user_email = nil, ---@type string | nil  authenticated user email
 }
 
 BinaryLifecycle.HARD_SIZE_LIMIT = 10e6
@@ -122,6 +127,9 @@ end
 ---@param file_name string
 ---@param event_type "text_changed" | "cursor"
 function BinaryLifecycle:on_update(buffer, file_name, event_type)
+  if self.disabled then
+    return
+  end
   if config.ignore_filetypes[vim.bo.ft] or vim.tbl_contains(config.ignore_filetypes, vim.bo.filetype) then
     return
   end
@@ -242,7 +250,7 @@ function BinaryLifecycle:process_message(message)
   elseif message.kind == "passthrough" then
     self:process_message(message.passthrough)
   elseif message.kind == "popup" then
-    -- unused
+    self:handle_popup(message)
   elseif message.kind == "task_status" then
     self.task_status = message.status or message.taskStatus or nil
   elseif message.kind == "active_repo" then
@@ -259,6 +267,28 @@ function BinaryLifecycle:process_message(message)
     vim.schedule(function()
       self:close_popup()
     end)
+  elseif message.kind == "connection_status" then
+    self.is_connected = message.is_connected
+    self.connection_status_text = message.status_text or nil
+  elseif message.kind == "user_status" then
+    self.user_email = message.email or nil
+    -- user_status also carries tier; update if we haven't gotten it from service_tier yet
+    if message.tier then
+      self.service_tier = self.service_tier or message.tier
+    end
+  elseif message.kind == "set_v2" then
+    if message.key == "disabled" then
+      local was_disabled = self.disabled
+      self.disabled = message.value == "true"
+      if self.disabled and not was_disabled then
+        local reason = self.disable_reason or "no reason given"
+        log:warn("Supermaven completions disabled by server: " .. reason)
+      elseif not self.disabled and was_disabled then
+        log:trace("Supermaven completions re-enabled by server.")
+      end
+    elseif message.key == "disable_reason" then
+      self.disable_reason = message.value
+    end
   elseif message.kind == "apology" then
     -- legacy
   elseif message.kind == "set" then
@@ -323,6 +353,10 @@ function BinaryLifecycle:provide_inline_completion_items(buffer, cursor, context
 end
 
 function BinaryLifecycle:poll_once()
+  if self.disabled then
+    self.wants_polling = false
+    return
+  end
   if config.ignore_filetypes[vim.bo.ft] or vim.tbl_contains(config.ignore_filetypes, vim.bo.filetype) then
     return
   end
@@ -692,6 +726,73 @@ function BinaryLifecycle:handle_nes_jump(buffer, completion)
   vim.schedule(function()
     nes:show(buffer, edit)
   end)
+end
+
+--- Handle a popup message from the binary.
+--- Popups may contain a message and an array of actions (open_url, logout, no_op).
+---@param message table
+function BinaryLifecycle:handle_popup(message)
+  local text = message.message or message.text or ""
+  local actions = message.actions
+
+  if not actions or #actions == 0 then
+    -- Informational popup with no actions — just notify
+    if text ~= "" then
+      vim.schedule(function()
+        log:trace(text)
+      end)
+    end
+    return
+  end
+
+  vim.schedule(function()
+    -- Build choice labels
+    local labels = {}
+    for _, action in ipairs(actions) do
+      table.insert(labels, action.label or action.kind or "OK")
+    end
+    table.insert(labels, "Dismiss")
+
+    vim.ui.select(labels, { prompt = text }, function(choice)
+      if not choice or choice == "Dismiss" then
+        return
+      end
+      for _, action in ipairs(actions) do
+        local label = action.label or action.kind or "OK"
+        if label == choice then
+          if action.kind == "open_url" and action.url then
+            if vim.ui and vim.ui.open then
+              pcall(vim.ui.open, action.url)
+            else
+              log:trace("Visit: " .. action.url)
+            end
+          elseif action.kind == "logout" then
+            self:logout()
+          end
+          -- "no_op" actions need no handling
+          return
+        end
+      end
+    end)
+  end)
+end
+
+--- Notify the server that the user accepted a completion.
+--- This feedback loop helps Supermaven improve future suggestions.
+---@param path string  file path where the completion was accepted
+---@param text string  the accepted completion text
+function BinaryLifecycle:text_accepted(path, text)
+  if not self:is_running() then
+    return
+  end
+  self:send_json({
+    kind = "passthrough_to_server",
+    passthrough = {
+      kind = "text_accepted",
+      path = path,
+      text = text,
+    },
+  })
 end
 
 function BinaryLifecycle:use_free_version()

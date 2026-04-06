@@ -111,8 +111,7 @@ end
 --- Statusline API ---
 
 --- Get the current Supermaven status suitable for statusline display.
---- Returns a table with fields: running, service_tier, service_display, task_status, active_repo
----@return { running: boolean, service_tier: string|nil, service_display: string|nil, task_status: string|nil, active_repo: string|nil }
+---@return { running: boolean, service_tier: string|nil, service_display: string|nil, task_status: string|nil, active_repo: string|nil, is_connected: boolean|nil, connection_status_text: string|nil, disabled: boolean, disable_reason: string|nil, user_email: string|nil }
 M.get_status = function()
   return {
     running = binary:is_running(),
@@ -120,21 +119,45 @@ M.get_status = function()
     service_display = binary.service_display,
     task_status = binary.task_status,
     active_repo = binary.active_repo,
+    is_connected = binary.is_connected,
+    connection_status_text = binary.connection_status_text,
+    disabled = binary.disabled or false,
+    disable_reason = binary.disable_reason,
+    user_email = binary.user_email,
   }
 end
 
 --- Get a short string suitable for direct statusline use.
---- Examples: " Pro", " Free", " Off"
+--- Examples: "Supermaven Pro", "Supermaven Free", "Supermaven Off", "Supermaven Disconnected"
 ---@return string
 M.get_status_string = function()
   if not binary:is_running() then
     return "Supermaven Off"
+  end
+  if binary.disabled then
+    return "Supermaven Disabled"
+  end
+  if binary.is_connected == false then
+    return "Supermaven Disconnected"
   end
   local display = binary.service_display
   if display and display ~= "" then
     return "Supermaven " .. display
   end
   return "Supermaven"
+end
+
+--- Check if the binary has an active connection to the Supermaven server
+---@return boolean
+M.is_connected = function()
+  if not binary:is_running() then
+    return false
+  end
+  -- nil means we haven't received a status yet; assume connected
+  if binary.is_connected == nil then
+    return true
+  end
+  return binary.is_connected
 end
 
 --- Check if Supermaven is currently completing (has pending inline completions)

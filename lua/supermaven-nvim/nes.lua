@@ -375,6 +375,15 @@ function Nes:accept()
   local edit = state.edit
   self:clear(bufnr)
 
+  -- Notify the server that the user accepted this edit
+  local binary = require("supermaven-nvim.binary.binary_handler")
+  local accepted_path = edit.file_name
+    or vim.api.nvim_buf_get_name(bufnr)
+  local accepted_text = edit.new_text or ""
+  if accepted_path and accepted_path ~= "" and accepted_text ~= "" then
+    binary:text_accepted(accepted_path, accepted_text)
+  end
+
   -- Fire user callback if configured
   if config.on_accept_nes and type(config.on_accept_nes) == "function" then
     config.on_accept_nes()

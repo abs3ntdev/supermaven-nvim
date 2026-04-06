@@ -201,6 +201,13 @@ function CompletionPreview.on_accept_suggestion(is_partial)
     end
     pcall(vim.api.nvim_win_set_cursor, 0, new_cursor_pos)
 
+    -- Notify the server that the user accepted this completion
+    local binary = require("supermaven-nvim.binary.binary_handler")
+    local file_path = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
+    if file_path and file_path ~= "" then
+      binary:text_accepted(file_path, completion_text)
+    end
+
     -- Fire user callback if configured
     local conf = require("supermaven-nvim.config")
     if conf.on_accept_suggestion and type(conf.on_accept_suggestion) == "function" then
