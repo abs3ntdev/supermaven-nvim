@@ -127,9 +127,6 @@ end
 ---@param file_name string
 ---@param event_type "text_changed" | "cursor"
 function BinaryLifecycle:on_update(buffer, file_name, event_type)
-  if self.disabled then
-    return
-  end
   if config.ignore_filetypes[vim.bo.ft] or vim.tbl_contains(config.ignore_filetypes, vim.bo.filetype) then
     return
   end
@@ -277,15 +274,9 @@ function BinaryLifecycle:process_message(message)
       self.service_tier = self.service_tier or message.tier
     end
   elseif message.kind == "set_v2" then
+    -- Track state for statusline but don't gate completions
     if message.key == "disabled" then
-      local was_disabled = self.disabled
       self.disabled = message.value == "true"
-      if self.disabled and not was_disabled then
-        local reason = self.disable_reason or "no reason given"
-        log:warn("Supermaven completions disabled by server: " .. reason)
-      elseif not self.disabled and was_disabled then
-        log:trace("Supermaven completions re-enabled by server.")
-      end
     elseif message.key == "disable_reason" then
       self.disable_reason = message.value
     end
@@ -353,10 +344,6 @@ function BinaryLifecycle:provide_inline_completion_items(buffer, cursor, context
 end
 
 function BinaryLifecycle:poll_once()
-  if self.disabled then
-    self.wants_polling = false
-    return
-  end
   if config.ignore_filetypes[vim.bo.ft] or vim.tbl_contains(config.ignore_filetypes, vim.bo.filetype) then
     return
   end
