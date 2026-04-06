@@ -1,6 +1,8 @@
 # Supermaven Neovim Plugin
 
-This plugin, supermaven-nvim, lets you use [Supermaven](https://supermaven.com/) in Neovim. If you encounter any issues while using supermaven-nvim, consider opening an issue or reaching out to us on [Discord](https://discord.com/invite/QQpqBmQH3w).
+This is a fork of [supermaven-inc/supermaven-nvim](https://github.com/supermaven-inc/supermaven-nvim) with additional features including NES (Next Edit Suggestions), a blink.cmp completion source, LSP context enrichment, and a statusline API.
+
+If you encounter any issues, consider opening an issue on this repository.
 
 ## Installation
 
@@ -11,23 +13,12 @@ Using a plugin manager, run the .setup({}) function in your Neovim configuration
 ```lua
 require("lazy").setup({
     {
-      "supermaven-inc/supermaven-nvim",
+      "abs3ntdev/supermaven-nvim",
       config = function()
         require("supermaven-nvim").setup({})
       end,
     },
 }, {})
-```
-
-### Using [packer.nvim](https://github.com/wbthomason/packer.nvim)
-
-```lua
-use {
-  "supermaven-inc/supermaven-nvim",
-  config = function()
-    require("supermaven-nvim").setup({})
-  end,
-}
 ```
 
 ### Optional configuration
@@ -55,7 +46,26 @@ require("supermaven-nvim").setup({
   disable_keymaps = false, -- disables built in keymaps for more manual control
   condition = function()
     return false
-  end -- condition to check for stopping supermaven, `true` means to stop supermaven when the condition is true.
+  end, -- condition to check for stopping supermaven, `true` means to stop supermaven when the condition is true.
+  -- NES (Next Edit Suggestions) - proactive edit suggestions in normal mode
+  nes = {
+    enabled = false,
+    keymaps = {
+      accept = "<Tab>",
+      dismiss = "<C-]>",
+      next = "]s",
+    },
+    move_count_threshold = 3, -- cursor moves before auto-dismissing on-screen edits
+    distance_threshold = 40, -- line distance before showing a floating preview
+  },
+  -- LSP context enrichment - sends definition/type files to the agent for richer completions
+  lsp_context = {
+    enabled = false,
+  },
+  -- Optional callbacks
+  on_accept_suggestion = nil, -- called after accepting an inline suggestion
+  on_accept_nes = nil, -- called after accepting a NES edit
+  on_dismiss_nes = nil, -- called after dismissing a NES edit
 })
 ```
 
