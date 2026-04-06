@@ -236,7 +236,7 @@ function BinaryLifecycle:process_message(message)
     if not already_shown then
       vim.schedule(function()
         if self.activate_url ~= nil then
-          log:trace("Opening Supermaven activation in browser: " .. self.activate_url .. " (or use :SupermavenUseFree)")
+          log:info("Opening Supermaven activation in browser: " .. self.activate_url .. " (or use :SupermavenUseFree)")
           self:open_activation_url(self.activate_url, true)
         end
       end)
