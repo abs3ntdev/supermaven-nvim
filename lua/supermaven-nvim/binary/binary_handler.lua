@@ -236,10 +236,12 @@ function BinaryLifecycle:process_message(message)
       self.activation_opened = true
       vim.schedule(function()
         if self.activate_url ~= nil then
-          log:info("Opening Supermaven activation in browser: " .. self.activate_url .. " (or use :SupermavenUseFree)")
+          vim.notify("[supermaven-nvim] Opening activation in browser: " .. self.activate_url .. " (or use :SupermavenUseFree)", vim.log.levels.INFO)
           self:open_activation_url(self.activate_url, true)
         end
       end)
+    else
+      log:debug("activation_request ignored (already opened)")
     end
   elseif message.kind == "activation_success" then
     self.activate_url = nil
