@@ -231,12 +231,16 @@ function BinaryLifecycle:process_message(message)
   elseif message.kind == "metadata" then
     self:update_metadata(message)
   elseif message.kind == "activation_request" then
+    local already_shown = self.activate_url == message.activateUrl
     self.activate_url = message.activateUrl
-    vim.schedule(function()
-      if self.activate_url ~= nil then
-        self:open_activation_url(self.activate_url, true)
-      end
-    end)
+    if not already_shown then
+      vim.schedule(function()
+        if self.activate_url ~= nil then
+          log:trace("Opening Supermaven activation in browser: " .. self.activate_url .. " (or use :SupermavenUseFree)")
+          self:open_activation_url(self.activate_url, true)
+        end
+      end)
+    end
   elseif message.kind == "activation_success" then
     self.activate_url = nil
     log:trace("Supermaven was activated successfully.")
