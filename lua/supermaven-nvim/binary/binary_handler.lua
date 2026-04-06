@@ -231,9 +231,9 @@ function BinaryLifecycle:process_message(message)
   elseif message.kind == "metadata" then
     self:update_metadata(message)
   elseif message.kind == "activation_request" then
-    local already_shown = self.activate_url == message.activateUrl
     self.activate_url = message.activateUrl
-    if not already_shown then
+    if not self.activation_opened then
+      self.activation_opened = true
       vim.schedule(function()
         if self.activate_url ~= nil then
           log:info("Opening Supermaven activation in browser: " .. self.activate_url .. " (or use :SupermavenUseFree)")
@@ -243,7 +243,8 @@ function BinaryLifecycle:process_message(message)
     end
   elseif message.kind == "activation_success" then
     self.activate_url = nil
-    log:trace("Supermaven was activated successfully.")
+    self.activation_opened = false
+    log:info("Supermaven was activated successfully.")
     vim.schedule(function()
       self:close_popup()
     end)
@@ -787,6 +788,7 @@ end
 
 function BinaryLifecycle:logout()
   self.service_message_displayed = false
+  self.activation_opened = false
   local message = vim.json.encode({ kind = "logout" }) .. "\n"
   loop.write(self.stdin, message) -- fails silently
 end
