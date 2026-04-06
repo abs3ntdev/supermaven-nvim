@@ -214,7 +214,7 @@ function BinaryLifecycle:process_message(message)
     self.activate_url = message.activateUrl
     vim.schedule(function()
       if self.activate_url ~= nil then
-        self:open_popup(self.activate_url, true)
+        self:open_activation_url(self.activate_url, true)
       end
     end)
   elseif message.kind == "activation_success" then
@@ -562,6 +562,14 @@ function BinaryLifecycle:handle_nes_delete(buffer, completion)
     return
   end
 
+  -- Respect ignore_filetypes for NES too
+  if vim.api.nvim_buf_is_valid(buffer) then
+    local ft = vim.bo[buffer].filetype
+    if config.ignore_filetypes[ft] or vim.tbl_contains(config.ignore_filetypes, ft) then
+      return
+    end
+  end
+
   local nes = require("supermaven-nvim.nes")
   local cursor = self.cursor
   if not cursor then
@@ -597,6 +605,14 @@ function BinaryLifecycle:handle_nes_jump(buffer, completion)
   local nes_config = config.nes or {}
   if not nes_config.enabled then
     return
+  end
+
+  -- Respect ignore_filetypes for NES too
+  if vim.api.nvim_buf_is_valid(buffer) then
+    local ft = vim.bo[buffer].filetype
+    if config.ignore_filetypes[ft] or vim.tbl_contains(config.ignore_filetypes, ft) then
+      return
+    end
   end
 
   local nes = require("supermaven-nvim.nes")
@@ -676,10 +692,27 @@ end
 function BinaryLifecycle:use_pro()
   if self.activate_url ~= nil then
     log:debug("Visit " .. self.activate_url .. " to set up Supermaven Pro")
-    self:open_popup(self.activate_url)
+    self:open_activation_url(self.activate_url)
   else
     log:error("Could not find an activation URL.")
   end
+end
+
+--- Try to open the activation URL in the user's browser, fall back to a popup window
+---@param url string
+---@param include_free? boolean  show "(or use :SupermavenUseFree)" hint
+function BinaryLifecycle:open_activation_url(url, include_free)
+  -- Try vim.ui.open (Neovim 0.10+) — opens the system browser directly
+  if vim.ui and vim.ui.open then
+    local ok, _ = pcall(vim.ui.open, url)
+    if ok then
+      local hint = include_free and " (or use :SupermavenUseFree)" or ""
+      log:trace("Opened activation URL in browser" .. hint)
+      return
+    end
+  end
+  -- Fallback: show the URL in a floating popup
+  self:open_popup(url, include_free)
 end
 
 function BinaryLifecycle:close_popup()
@@ -697,8 +730,8 @@ function BinaryLifecycle:open_popup(message, include_free)
 
   local width = 0
   local height = 0
-  width = u.nvim_get_option_value("columns", { scope = "local" })
-  height = u.nvim_get_option_value("lines", { scope = "local" })
+  width = vim.o.columns
+  height = vim.o.lines
 
   local intro_message = "Please visit the following URL to set up Supermaven Pro"
   if include_free then

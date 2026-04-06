@@ -191,8 +191,21 @@ function CompletionPreview.on_accept_suggestion(is_partial)
 
     local lines = u.line_count(completion_text)
     local last_line = u.get_last_line(completion_text)
-    local new_cursor_pos = { cursor[1] + lines, cursor[2] + #last_line + 1 }
-    vim.api.nvim_win_set_cursor(0, new_cursor_pos)
+    local new_cursor_pos
+    if lines == 0 then
+      -- Single line: cursor stays on same row, column = start of edit + length of completion
+      new_cursor_pos = { cursor[1], math.max(cursor[2] - prior_delete, 0) + #last_line }
+    else
+      -- Multi-line: cursor moves to end of last inserted line
+      new_cursor_pos = { cursor[1] + lines, #last_line }
+    end
+    pcall(vim.api.nvim_win_set_cursor, 0, new_cursor_pos)
+
+    -- Fire user callback if configured
+    local conf = require("supermaven-nvim.config")
+    if conf.on_accept_suggestion and type(conf.on_accept_suggestion) == "function" then
+      conf.on_accept_suggestion()
+    end
   else
     local config = require("supermaven-nvim.config")
     local accept_key = config.keymaps and config.keymaps.accept_suggestion or "<Tab>"

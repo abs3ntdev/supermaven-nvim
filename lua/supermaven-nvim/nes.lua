@@ -196,6 +196,11 @@ end
 function Nes:dismiss()
   local bufnr = vim.api.nvim_get_current_buf()
   self:clear(bufnr)
+
+  -- Fire user callback if configured
+  if config.on_dismiss_nes and type(config.on_dismiss_nes) == "function" then
+    config.on_dismiss_nes()
+  end
 end
 
 --- Render a delete suggestion (strikethrough/highlight over lines to be deleted)
@@ -369,6 +374,11 @@ function Nes:accept()
 
   local edit = state.edit
   self:clear(bufnr)
+
+  -- Fire user callback if configured
+  if config.on_accept_nes and type(config.on_accept_nes) == "function" then
+    config.on_accept_nes()
+  end
 
   -- Cross-file edits: open the target file first, then apply the edit there
   local target_bufnr = bufnr
@@ -605,6 +615,14 @@ function Nes:setup()
     group = self.augroup,
     callback = function(event)
       self:clear(event.buf)
+    end,
+  })
+
+  -- Clear floating preview when leaving the buffer
+  vim.api.nvim_create_autocmd({ "BufLeave" }, {
+    group = self.augroup,
+    callback = function(event)
+      self:close_preview()
     end,
   })
 

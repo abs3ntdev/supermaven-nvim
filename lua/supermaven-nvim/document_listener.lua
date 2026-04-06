@@ -9,6 +9,10 @@ local M = {
 M.setup = function()
   M.augroup = vim.api.nvim_create_augroup("supermaven", { clear = true })
 
+  -- Always define a default highlight group for inline suggestions
+  vim.api.nvim_set_hl(0, "SupermavenSuggestion", { link = "Comment", default = true })
+  preview.suggestion_group = "SupermavenSuggestion"
+
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
     group = M.augroup,
     callback = function(event)
@@ -65,12 +69,20 @@ M.setup = function()
     vim.api.nvim_create_autocmd({ "VimEnter", "ColorScheme" }, {
       group = M.augroup,
       pattern = "*",
-      callback = function(event)
+      callback = function()
         vim.api.nvim_set_hl(0, "SupermavenSuggestion", {
           fg = config.color.suggestion_color,
           ctermfg = config.color.cterm,
         })
-        preview.suggestion_group = "SupermavenSuggestion"
+      end,
+    })
+  else
+    -- Re-apply the default link on colorscheme change so it survives reloads
+    vim.api.nvim_create_autocmd({ "ColorScheme" }, {
+      group = M.augroup,
+      pattern = "*",
+      callback = function()
+        vim.api.nvim_set_hl(0, "SupermavenSuggestion", { link = "Comment", default = true })
       end,
     })
   end

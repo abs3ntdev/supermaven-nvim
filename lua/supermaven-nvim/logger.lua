@@ -88,7 +88,7 @@ function log:add_entry(level, msg)
 
   self:write_log_file(level, msg)
   if level_values[level] >= level_values[conf.log_level] then
-    print(self.__notify_fmt(msg))
+    vim.notify(self.__notify_fmt(msg), vim.log.levels.INFO)
   end
 end
 

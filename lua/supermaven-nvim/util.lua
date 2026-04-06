@@ -59,6 +59,7 @@ function M.removeAfterNewline(str)
   end
 end
 
+--- @deprecated Use vim.split() directly
 function M.split(str, sep)
   return vim.fn.split(str, sep)
 end
@@ -82,11 +83,7 @@ function M.first_line_split(str, highlight_group)
 end
 
 function M.get_home_directory()
-  local homeDir = os.getenv("HOME")
-  if not homeDir then
-    homeDir = os.getenv("USERPROFILE") -- windows
-  end
-  return homeDir
+  return vim.uv.os_homedir() or os.getenv("HOME") or os.getenv("USERPROFILE")
 end
 
 function M.get_cursor_prefix(bufnr, cursor)
@@ -150,11 +147,11 @@ function M.print_table(t, message)
 end
 
 function M.starts_with(str, prefix)
-  return string.sub(str, 1, #prefix) == prefix
+  return vim.startswith(str, prefix)
 end
 
 function M.ends_with(str, suffix)
-  return string.sub(str, -#suffix) == suffix
+  return vim.endswith(str, suffix)
 end
 
 function M.line_count(str)

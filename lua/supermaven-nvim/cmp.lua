@@ -1,7 +1,4 @@
 local CompletionPreview = require("supermaven-nvim.completion_preview")
-local u = require("supermaven-nvim.util")
-
-local loop = u.uv
 
 local source = { executions = {} }
 
@@ -62,11 +59,8 @@ function source.complete(self, params, callback)
   local split = vim.split(completion_text, "\n", { plain = true })
   local label = label_text(split[1])
 
+  -- Always use PlainText — multi-line completions are not snippet templates
   local insertTextFormat = 1 -- cmp.lsp.InsertTextFormat.PlainText
-
-  if #split > 1 then
-    insertTextFormat = 2 -- cmp.lsp.InsertTextFormat.Snippet
-  end
 
   local range = {
     start = {
@@ -110,12 +104,8 @@ function source.complete(self, params, callback)
 end
 
 function source.new(client, opts)
-  local self = setmetatable({
-    timer = loop.new_timer(),
-  }, { __index = source })
-
+  local self = setmetatable({}, { __index = source })
   self.client = client
-
   return self
 end
 
