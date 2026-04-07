@@ -111,28 +111,6 @@ local function finish_completion(output, dedent, params, full_completion_index)
       }
     end
     if params.can_retry then
-      if has_trailing_characters then
-        return {
-          kind = "text",
-          text = output,
-          dedent = dedent,
-          should_retry = true,
-          is_incomplete = true,
-          source_state_id = params.source_state_id,
-          completion_index = nil,
-        }
-      end
-      if u.trim(params.line_before_cursor) == "" then
-        return {
-          kind = "text",
-          text = output,
-          dedent = dedent,
-          should_retry = true,
-          is_incomplete = true,
-          source_state_id = params.source_state_id,
-          completion_index = nil,
-        }
-      end
       return {
         kind = "text",
         text = output,
@@ -221,8 +199,14 @@ function M.derive_completion(completion, params)
     elseif response_item.kind == "dedent" then
       dedent = dedent .. response_item.text
     elseif response_item.kind == "jump" then
-      log:debug(string.format("textual: saw jump response item -> fileName=%s lineNumber=%s output_empty=%s",
-        tostring(response_item.fileName), tostring(response_item.lineNumber), tostring(u.trim(output) == "")))
+      log:debug(
+        string.format(
+          "textual: saw jump response item -> fileName=%s lineNumber=%s output_empty=%s",
+          tostring(response_item.fileName),
+          tostring(response_item.lineNumber),
+          tostring(u.trim(output) == "")
+        )
+      )
       if u.trim(output) ~= "" then
         -- There's pending text output — flush it first, the jump will be picked up on the next poll
         return force_complete(output, dedent, params, completion_index)

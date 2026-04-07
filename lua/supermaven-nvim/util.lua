@@ -50,20 +50,6 @@ function M.contains(a, b)
   return false
 end
 
-function M.removeAfterNewline(str)
-  local newlinePos = string.find(str, "\n")
-  if newlinePos then
-    return string.sub(str, 1, newlinePos - 1)
-  else
-    return str
-  end
-end
-
---- @deprecated Use vim.split() directly
-function M.split(str, sep)
-  return vim.fn.split(str, sep)
-end
-
 function M.first_line_split(str, highlight_group)
   local first_line = nil
   local other_lines = {}
@@ -82,10 +68,6 @@ function M.first_line_split(str, highlight_group)
   }
 end
 
-function M.get_home_directory()
-  return vim.uv.os_homedir() or os.getenv("HOME") or os.getenv("USERPROFILE")
-end
-
 function M.get_cursor_prefix(bufnr, cursor)
   if not vim.api.nvim_buf_is_valid(bufnr) then
     return ""
@@ -93,16 +75,6 @@ function M.get_cursor_prefix(bufnr, cursor)
 
   local prefix = vim.api.nvim_buf_get_text(bufnr, 0, 0, cursor[1] - 1, cursor[2], {})
   local text = table.concat(prefix, "\n")
-  return text
-end
-
-function M.get_cursor_suffix(bufnr, cursor)
-  if not vim.api.nvim_buf_is_valid(bufnr) then
-    return ""
-  end
-
-  local suffix = vim.api.nvim_buf_get_text(bufnr, cursor[1], cursor[2], -1, -1, {})
-  local text = table.concat(suffix, "\n")
   return text
 end
 
@@ -136,18 +108,6 @@ function M.get_text(bufnr)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local text = table.concat(lines, "\n")
   return text
-end
-
-function M.print_table(t, message)
-  if message == nil then
-    log:info(vim.inspect(t) .. "\n")
-  else
-    log:info(message .. ": " .. vim.inspect(t) .. "\n")
-  end
-end
-
-function M.starts_with(str, prefix)
-  return vim.startswith(str, prefix)
 end
 
 function M.ends_with(str, suffix)
@@ -198,23 +158,6 @@ function M.safe_get_line(bufnr, line_number)
 
   local lines = vim.api.nvim_buf_get_lines(bufnr, line_number - 1, line_number, false)
   return lines[1]
-end
-
--- Flattening table
----@param t table Table to flatten
----@param n? number Depth of the flattening
-M.tbl_flatten = function(t, n)
-  if n ~= nil then
-    return vim.iter(t):flatten(n):totable()
-  end
-  return vim.iter(t):flatten():totable()
-end
-
--- Get options from buffer
----@param name string Option name, for example `"columns"`
----@param opts? vim.api.keyset.option Options, for example `{ scope = "local" }`
-M.nvim_get_option_value = function(name, opts)
-  return vim.api.nvim_get_option_value(name, opts or { scope = "local" })
 end
 
 -- Set options in a buffer or window

@@ -31,7 +31,11 @@ M.setup = function()
       table.insert(parts, "Account: " .. status.user_email)
     end
     if status.is_connected == false then
-      table.insert(parts, "Connection: disconnected" .. (status.connection_status_text and (" (" .. status.connection_status_text .. ")") or ""))
+      table.insert(
+        parts,
+        "Connection: disconnected"
+          .. (status.connection_status_text and (" (" .. status.connection_status_text .. ")") or "")
+      )
     end
     if status.disabled then
       table.insert(parts, "Disabled: " .. (status.disable_reason or "yes"))

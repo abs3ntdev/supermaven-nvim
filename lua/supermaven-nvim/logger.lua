@@ -1,4 +1,3 @@
----@diagnostic disable: missing-parameter
 local c = require("supermaven-nvim.config")
 local loop = vim.uv
 
@@ -88,7 +87,15 @@ function log:add_entry(level, msg)
 
   self:write_log_file(level, msg)
   if level_values[level] >= level_values[conf.log_level] then
-    vim.notify(self.__notify_fmt(msg), vim.log.levels.INFO)
+    local notify_level = vim.log.levels.INFO
+    if level == "warn" then
+      notify_level = vim.log.levels.WARN
+    elseif level == "error" then
+      notify_level = vim.log.levels.ERROR
+    elseif level == "debug" or level == "trace" then
+      notify_level = vim.log.levels.DEBUG
+    end
+    vim.notify(self.__notify_fmt(msg), notify_level)
   end
 end
 
@@ -107,7 +114,6 @@ end
 ---@param msg string: The log message
 function log:warn(msg)
   self:add_entry("warn", msg)
-  vim.notify(self.__notify_fmt(msg), vim.log.levels.WARN)
 end
 
 --- Logs an error message to the log file
@@ -115,7 +121,6 @@ end
 ---@param msg string: The log message
 function log:error(msg)
   self:add_entry("error", msg)
-  vim.notify(self.__notify_fmt(msg), vim.log.levels.ERROR)
 end
 
 --- Logs an informational message to the log file

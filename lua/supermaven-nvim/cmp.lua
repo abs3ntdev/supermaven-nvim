@@ -53,6 +53,7 @@ function source.complete(self, params, callback)
 
   local context = params.context
   local cursor = context.cursor
+  local bufnr = context.bufnr or vim.api.nvim_get_current_buf()
 
   local completion_text = inlay_instance.line_before_cursor .. inlay_instance.completion_text
   local preview_text = completion_text
@@ -91,7 +92,7 @@ function source.complete(self, params, callback)
       },
       documentation = {
         kind = "markdown",
-        value = "```" .. vim.bo.filetype .. "\n" .. preview_text .. "\n```",
+        value = "```" .. vim.bo[bufnr].filetype .. "\n" .. preview_text .. "\n```",
       },
       dup = 0,
     },

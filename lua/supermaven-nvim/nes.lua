@@ -44,7 +44,10 @@ local function open_file(file_name, create)
       end
     end
   end
-  vim.cmd.edit(file_name)
+  local ok, err = pcall(vim.cmd.edit, file_name)
+  if not ok then
+    log:warn("Failed to open file: " .. tostring(err))
+  end
   return vim.api.nvim_get_current_buf()
 end
 
@@ -377,8 +380,7 @@ function Nes:accept()
 
   -- Notify the server that the user accepted this edit
   local binary = require("supermaven-nvim.binary.binary_handler")
-  local accepted_path = edit.file_name
-    or vim.api.nvim_buf_get_name(bufnr)
+  local accepted_path = edit.file_name or vim.api.nvim_buf_get_name(bufnr)
   local accepted_text = edit.new_text or ""
   if accepted_path and accepted_path ~= "" and accepted_text ~= "" then
     binary:text_accepted(accepted_path, accepted_text)
@@ -410,7 +412,7 @@ function Nes:accept()
   elseif edit.kind == "insert" then
     local line = edit.range.start.line
     local col = edit.range.start.character
-    vim.lsp.util.apply_text_edits({
+    local ok, err = pcall(vim.lsp.util.apply_text_edits, {
       {
         range = {
           start = { line = line, character = col },
@@ -419,9 +421,12 @@ function Nes:accept()
         newText = edit.new_text,
       },
     }, target_bufnr, "utf-8")
-    return true
+    if not ok then
+      log:debug("NES apply_text_edits failed: " .. tostring(err))
+    end
+    return ok
   elseif edit.kind == "replace" then
-    vim.lsp.util.apply_text_edits({
+    local ok, err = pcall(vim.lsp.util.apply_text_edits, {
       {
         range = {
           start = { line = edit.range.start.line, character = edit.range.start.character },
@@ -430,7 +435,10 @@ function Nes:accept()
         newText = edit.new_text,
       },
     }, target_bufnr, "utf-8")
-    return true
+    if not ok then
+      log:debug("NES apply_text_edits failed: " .. tostring(err))
+    end
+    return ok
   end
 
   return false

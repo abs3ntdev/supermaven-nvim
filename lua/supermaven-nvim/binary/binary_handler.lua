@@ -81,7 +81,9 @@ function BinaryLifecycle:start_binary()
     stdio = { self.stdin, self.stdout, self.stderr },
   }, function(code, signal)
     log:debug("sm-agent exited with code " .. code)
-    self.handle:close()
+    if self.handle and not self.handle:is_closing() then
+      self.handle:close()
+    end
     self.handle = nil
   end)
   if not self.handle then
@@ -107,14 +109,39 @@ function BinaryLifecycle:is_running()
   return self.handle ~= nil and self.handle:is_active()
 end
 
+--- Safely close a pipe handle if it is open
+---@param pipe userdata|nil
+local function close_pipe(pipe)
+  if pipe and not pipe:is_closing() then
+    pipe:close()
+  end
+end
+
 function BinaryLifecycle:stop_binary()
   self:stop_poll_timer()
   self.wants_polling = false
+
+  if self.stdout then
+    pcall(loop.read_stop, self.stdout)
+  end
+
   if self:is_running() then
     self.handle:kill(loop.constants.SIGTERM)
-    self.handle:close()
+  end
+
+  if self.handle then
+    if not self.handle:is_closing() then
+      self.handle:close()
+    end
     self.handle = nil
   end
+
+  close_pipe(self.stdin)
+  close_pipe(self.stdout)
+  close_pipe(self.stderr)
+  self.stdin = nil
+  self.stdout = nil
+  self.stderr = nil
 end
 
 function BinaryLifecycle:greeting_message()
@@ -126,7 +153,11 @@ end
 ---@param file_name string
 ---@param event_type "text_changed" | "cursor"
 function BinaryLifecycle:on_update(buffer, file_name, event_type)
-  if config.ignore_filetypes[vim.bo.ft] or vim.tbl_contains(config.ignore_filetypes, vim.bo.filetype) then
+  if not vim.api.nvim_buf_is_valid(buffer) then
+    return
+  end
+  local ft = vim.bo[buffer].filetype
+  if config.ignore_filetypes[ft] or vim.tbl_contains(config.ignore_filetypes, ft) then
     return
   end
   local buffer_text = u.get_text(buffer)
@@ -167,7 +198,9 @@ function BinaryLifecycle:check_process()
   end
 
   if self.handle ~= nil then
-    self.handle:close()
+    if not self.handle:is_closing() then
+      self.handle:close()
+    end
     self.handle = nil
   end
 
@@ -218,7 +251,11 @@ end
 function BinaryLifecycle:process_line(line)
   if string.sub(line, 1, 11) == "SM-MESSAGE " then
     line = string.sub(line, 12)
-    local message = vim.json.decode(line)
+    local ok, message = pcall(vim.json.decode, line)
+    if not ok then
+      log:debug("Failed to decode JSON from sm-agent: " .. tostring(message))
+      return
+    end
     self:process_message(message)
   else
     log:debug("Unknown message: " .. line)
@@ -236,7 +273,10 @@ function BinaryLifecycle:process_message(message)
       self.activation_opened = true
       vim.schedule(function()
         if self.activate_url ~= nil then
-          vim.notify("[supermaven-nvim] Opening activation in browser: " .. self.activate_url .. " (or use :SupermavenUseFree)", vim.log.levels.INFO)
+          vim.notify(
+            "[supermaven-nvim] Opening activation in browser: " .. self.activate_url .. " (or use :SupermavenUseFree)",
+            vim.log.levels.INFO
+          )
           self:open_activation_url(self.activate_url, true)
         end
       end)
@@ -347,9 +387,6 @@ function BinaryLifecycle:provide_inline_completion_items(buffer, cursor, context
 end
 
 function BinaryLifecycle:poll_once()
-  if config.ignore_filetypes[vim.bo.ft] or vim.tbl_contains(config.ignore_filetypes, vim.bo.filetype) then
-    return
-  end
   local now = loop.now()
   if now - self.last_provide_time > 5 * 1000 then
     self.wants_polling = false
@@ -358,7 +395,12 @@ function BinaryLifecycle:poll_once()
   self.wants_polling = true
   local buffer = self.buffer
   local cursor = self.cursor
-  if not vim.api.nvim_buf_is_valid(buffer) then
+  if not buffer or not vim.api.nvim_buf_is_valid(buffer) then
+    self.wants_polling = false
+    return
+  end
+  local ft = vim.bo[buffer].filetype
+  if config.ignore_filetypes[ft] or vim.tbl_contains(config.ignore_filetypes, ft) then
     self.wants_polling = false
     return
   end
@@ -396,7 +438,13 @@ function BinaryLifecycle:poll_once()
   end
 
   if maybe_completion.kind == "jump" then
-    log:debug(string.format("NES: received jump completion -> file=%s line=%s", maybe_completion.file_name or "(current)", tostring(maybe_completion.line_number)))
+    log:debug(
+      string.format(
+        "NES: received jump completion -> file=%s line=%s",
+        maybe_completion.file_name or "(current)",
+        tostring(maybe_completion.line_number)
+      )
+    )
     self:handle_nes_jump(buffer, maybe_completion)
     return
   elseif maybe_completion.kind == "delete" then
@@ -408,8 +456,9 @@ function BinaryLifecycle:poll_once()
   end
 
   self.wants_polling = maybe_completion.is_incomplete
-  if maybe_completion.dedent == nil or
-   (#maybe_completion.dedent > 0 and not u.ends_with(line_before_cursor, maybe_completion.dedent))
+  if
+    maybe_completion.dedent == nil
+    or (#maybe_completion.dedent > 0 and not u.ends_with(line_before_cursor, maybe_completion.dedent))
   then
     return
   end
@@ -836,10 +885,8 @@ function BinaryLifecycle:open_popup(message, include_free)
   end
   local buf = vim.api.nvim_create_buf(false, true)
 
-  local width = 0
-  local height = 0
-  width = vim.o.columns
-  height = vim.o.lines
+  local width = vim.o.columns
+  local height = vim.o.lines
 
   local intro_message = "Please visit the following URL to set up Supermaven Pro"
   if include_free then

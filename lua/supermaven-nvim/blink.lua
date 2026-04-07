@@ -51,6 +51,7 @@ function source:get_completions(ctx, callback)
   end
 
   local cursor = ctx.cursor
+  local bufnr = ctx.bufnr or vim.api.nvim_get_current_buf()
   local completion_text = inlay_instance.line_before_cursor .. inlay_instance.completion_text
   local preview_text = completion_text
   local split = vim.split(completion_text, "\n", { plain = true })
@@ -84,7 +85,7 @@ function source:get_completions(ctx, callback)
       },
       documentation = {
         kind = "markdown",
-        value = "```" .. vim.bo.filetype .. "\n" .. preview_text .. "\n```",
+        value = "```" .. vim.bo[bufnr].filetype .. "\n" .. preview_text .. "\n```",
       },
     },
   }
@@ -97,6 +98,10 @@ function source:get_completions(ctx, callback)
 end
 
 function source:resolve(item, callback)
+  callback(item)
+end
+
+function source:execute(_, item, callback)
   CompletionPreview:dispose_inlay()
   callback(item)
 end

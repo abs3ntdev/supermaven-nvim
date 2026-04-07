@@ -85,9 +85,9 @@ function BinaryFetcher:fetch_binary()
   if status ~= nil then
     return local_binary_path
   else
-    local success = vim.fn.mkdir(self:local_binary_parent_path(), "p")
-    if not success then
-      log:error("Error creating directory " .. self:local_binary_parent_path())
+    local parent = self:local_binary_parent_path()
+    if vim.fn.mkdir(parent, "p") == 0 then
+      log:error("Error creating directory " .. parent)
       return nil
     end
   end
@@ -101,27 +101,27 @@ function BinaryFetcher:fetch_binary()
   local temp_path = generate_temp_path(10)
 
   local platform = self:platform()
-  local response = ""
   if platform == "windows" then
-    response = vim.fn.system({
+    vim.fn.system({
       "powershell",
+      "-NoProfile",
       "-Command",
-      "Invoke-WebRequest",
-      "-Uri",
-      "'" .. url .. "'",
-      "-OutFile",
-      "'" .. local_binary_path .. "'",
+      string.format("Invoke-WebRequest -Uri '%s' -OutFile '%s' -UseBasicParsing", url, local_binary_path),
     })
   else
-    response = vim.fn.system({ "curl", "-o", temp_path, url })
+    vim.fn.system({ "curl", "-sL", "-o", temp_path, url })
   end
   if vim.v.shell_error == 0 then
     if platform ~= "windows" then
-      vim.fn.system({ "mv", temp_path, local_binary_path })
+      local ok = loop.fs_rename(temp_path, local_binary_path)
+      if not ok then
+        vim.fn.system({ "mv", temp_path, local_binary_path })
+      end
     end
     log:info("Downloaded binary sm-agent to " .. local_binary_path)
   else
     log:error("sm-agent download failed")
+    pcall(os.remove, temp_path)
     return nil
   end
   loop.fs_chmod(local_binary_path, 493)
