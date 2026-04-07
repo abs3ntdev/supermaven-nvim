@@ -718,20 +718,49 @@ function BinaryLifecycle:handle_nes_jump(buffer, completion)
   local old_text = table.concat(completion.precede or {}, "\n")
   local num_precede = completion.precede and #completion.precede or 0
 
+  if u.trim_end(old_text) == u.trim_end(new_text) then
+    log:debug("NES: replace is a no-op, discarding")
+    return
+  end
+
   local is_cross = completion.file_name and completion.file_name ~= ""
-  if not is_cross and num_precede > 0 and vim.api.nvim_buf_is_valid(buffer) then
+  if not is_cross and vim.api.nvim_buf_is_valid(buffer) then
     local line_count = vim.api.nvim_buf_line_count(buffer)
-    for i, expected in ipairs(completion.precede) do
-      local buf_idx = target_line + i - 1
-      if buf_idx >= line_count then
-        log:debug("NES: precede extends beyond buffer, discarding")
-        return
+
+    if num_precede > 0 then
+      for i, expected in ipairs(completion.precede) do
+        local buf_idx = target_line + i - 1
+        if buf_idx >= line_count then
+          log:debug("NES: precede extends beyond buffer, discarding")
+          return
+        end
+        local actual = vim.api.nvim_buf_get_lines(buffer, buf_idx, buf_idx + 1, false)[1] or ""
+        if u.trim_end(actual) ~= u.trim_end(expected) then
+          log:debug(
+            string.format("NES: precede mismatch at line %d, expected=%s actual=%s", buf_idx, expected, actual)
+          )
+          return
+        end
       end
-      local actual = vim.api.nvim_buf_get_lines(buffer, buf_idx, buf_idx + 1, false)[1] or ""
-      if u.trim_end(actual) ~= u.trim_end(expected) then
-        log:debug(
-          string.format("NES: precede mismatch at line %d, expected=%s actual=%s", buf_idx, expected, actual)
-        )
+    end
+
+    if num_precede == 0 and new_text ~= "" then
+      local new_lines = vim.split(new_text, "\n", { plain = true })
+      local all_exist = true
+      for i, new_line in ipairs(new_lines) do
+        local buf_idx = target_line + i - 1
+        if buf_idx >= line_count then
+          all_exist = false
+          break
+        end
+        local actual = vim.api.nvim_buf_get_lines(buffer, buf_idx, buf_idx + 1, false)[1] or ""
+        if u.trim_end(actual) ~= u.trim_end(new_line) then
+          all_exist = false
+          break
+        end
+      end
+      if all_exist then
+        log:debug("NES: insert text already exists at target, discarding")
         return
       end
     end
