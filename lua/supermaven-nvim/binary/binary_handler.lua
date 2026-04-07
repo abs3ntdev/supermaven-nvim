@@ -708,7 +708,6 @@ function BinaryLifecycle:handle_nes_jump(buffer, completion)
 
   local nes = require("supermaven-nvim.nes")
 
-  -- The jump response tells us about an edit at another location
   local target_line = completion.line_number or 0
   local new_text = table.concat(completion.follow or {}, "\n")
 
@@ -716,9 +715,27 @@ function BinaryLifecycle:handle_nes_jump(buffer, completion)
     return
   end
 
-  -- If we have precede lines, this is a replacement at that location
   local old_text = table.concat(completion.precede or {}, "\n")
   local num_precede = completion.precede and #completion.precede or 0
+
+  local is_cross = completion.file_name and completion.file_name ~= ""
+  if not is_cross and num_precede > 0 and vim.api.nvim_buf_is_valid(buffer) then
+    local line_count = vim.api.nvim_buf_line_count(buffer)
+    for i, expected in ipairs(completion.precede) do
+      local buf_idx = target_line + i - 1
+      if buf_idx >= line_count then
+        log:debug("NES: precede extends beyond buffer, discarding")
+        return
+      end
+      local actual = vim.api.nvim_buf_get_lines(buffer, buf_idx, buf_idx + 1, false)[1] or ""
+      if u.trim_end(actual) ~= u.trim_end(expected) then
+        log:debug(
+          string.format("NES: precede mismatch at line %d, expected=%s actual=%s", buf_idx, expected, actual)
+        )
+        return
+      end
+    end
+  end
 
   ---@type NesEdit
   local edit
@@ -756,8 +773,7 @@ function BinaryLifecycle:handle_nes_jump(buffer, completion)
     return
   end
 
-  -- Attach cross-file metadata to the edit
-  if completion.file_name and completion.file_name ~= "" then
+  if is_cross then
     edit.file_name = completion.file_name
   end
   if completion.is_create_file then
