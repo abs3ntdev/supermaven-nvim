@@ -15,23 +15,8 @@ local default_config = {
     return false
   end,
   log_level = "info",
-  --- Optional callbacks for hooking into plugin events
   ---@type fun()|nil
   on_accept_suggestion = nil,
-  ---@type fun()|nil
-  on_accept_nes = nil,
-  ---@type fun()|nil
-  on_dismiss_nes = nil,
-  nes = {
-    enabled = false,
-    keymaps = {
-      accept = "<Tab>",
-      dismiss = "<C-]>",
-      next = "]s",
-    },
-    move_count_threshold = 3,
-    distance_threshold = 40,
-  },
   lsp_context = {
     enabled = false,
   },

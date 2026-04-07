@@ -2,8 +2,6 @@ local binary = require("supermaven-nvim.binary.binary_handler")
 local listener = require("supermaven-nvim.document_listener")
 local log = require("supermaven-nvim.logger")
 local u = require("supermaven-nvim.util")
-local nes = require("supermaven-nvim.nes")
-
 local loop = u.uv
 
 local M = {}
@@ -33,7 +31,6 @@ M.stop = function()
     log:trace("Stopping Supermaven...")
   end
   listener.teardown()
-  nes:teardown()
   binary:stop_binary()
 end
 
@@ -81,31 +78,6 @@ M.clear_log = function()
   else
     log:warn("No log file found to remove!")
   end
-end
-
---- NES API functions ---
-
---- Check if there is a pending NES edit in the current buffer
----@return boolean
-M.nes_has_edit = function()
-  return nes:has_edit()
-end
-
---- Accept the pending NES edit and jump to its end
----@return boolean true if an edit was applied
-M.nes_accept = function()
-  return nes:accept_and_goto()
-end
-
---- Dismiss the pending NES edit in the current buffer
-M.nes_dismiss = function()
-  nes:dismiss()
-end
-
---- Jump cursor to the pending NES edit location
----@return boolean true if cursor was moved
-M.nes_jump = function()
-  return nes:jump_to_edit()
 end
 
 --- Statusline API ---

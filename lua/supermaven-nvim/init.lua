@@ -3,8 +3,6 @@ local log = require("supermaven-nvim.logger")
 local config = require("supermaven-nvim.config")
 local commands = require("supermaven-nvim.commands")
 local api = require("supermaven-nvim.api")
-local nes = require("supermaven-nvim.nes")
-
 local M = {}
 
 M.setup = function(args)
@@ -43,7 +41,6 @@ M.setup = function(args)
   end
 
   commands.setup()
-  nes:setup()
 
   local cmp_ok, cmp = pcall(require, "cmp")
   if cmp_ok then

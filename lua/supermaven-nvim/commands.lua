@@ -1,7 +1,5 @@
 local api = require("supermaven-nvim.api")
 local log = require("supermaven-nvim.logger")
-local nes = require("supermaven-nvim.nes")
-
 local M = {}
 
 M.setup = function()
@@ -66,18 +64,6 @@ M.setup = function()
     api.clear_log()
   end, {})
 
-  -- NES commands
-  vim.api.nvim_create_user_command("SupermavenNesAccept", function()
-    nes:accept_and_goto()
-  end, { desc = "Accept the pending NES edit suggestion" })
-
-  vim.api.nvim_create_user_command("SupermavenNesDismiss", function()
-    nes:dismiss()
-  end, { desc = "Dismiss the pending NES edit suggestion" })
-
-  vim.api.nvim_create_user_command("SupermavenNesJump", function()
-    nes:jump_to_edit()
-  end, { desc = "Jump cursor to the pending NES edit location" })
 end
 
 return M
