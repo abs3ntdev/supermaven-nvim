@@ -67,9 +67,11 @@ function Nes:close_preview()
     vim.api.nvim_win_close(self.preview_win, true)
   end
   self.preview_win = nil
-  if self.preview_buf and vim.api.nvim_buf_is_valid(self.preview_buf) then
-    vim.api.nvim_buf_delete(self.preview_buf, { force = true })
-  end
+  pcall(function()
+    if self.preview_buf and vim.api.nvim_buf_is_valid(self.preview_buf) then
+      vim.api.nvim_buf_delete(self.preview_buf, { force = true })
+    end
+  end)
   self.preview_buf = nil
 end
 
@@ -287,15 +289,41 @@ function Nes:render_replace(bufnr, edit)
   end
 end
 
+--- Check if two NES edits are equivalent (same kind, range, and text)
+---@param a NesEdit
+---@param b NesEdit
+---@return boolean
+local function same_edit(a, b)
+  if a.kind ~= b.kind then
+    return false
+  end
+  if (a.file_name or "") ~= (b.file_name or "") then
+    return false
+  end
+  if a.new_text ~= b.new_text then
+    return false
+  end
+  local ar, br = a.range, b.range
+  return ar.start.line == br.start.line
+    and ar.start.character == br.start.character
+    and ar["end"].line == br["end"].line
+    and ar["end"].character == br["end"].character
+end
+
 --- Display an NES edit in the buffer
 ---@param bufnr integer
 ---@param edit NesEdit
 function Nes:show(bufnr, edit)
-  self:clear(bufnr)
-
   if not vim.api.nvim_buf_is_valid(bufnr) then
     return
   end
+
+  local existing = get_state(bufnr)
+  if existing and existing.edit and same_edit(existing.edit, edit) then
+    return
+  end
+
+  self:clear(bufnr)
 
   -- Cross-file edits: show a floating preview instead of inline extmarks
   if is_cross_file(bufnr, edit) then

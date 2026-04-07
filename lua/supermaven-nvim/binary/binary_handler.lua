@@ -446,10 +446,12 @@ function BinaryLifecycle:poll_once()
       )
     )
     self:handle_nes_jump(buffer, maybe_completion)
+    self.wants_polling = false
     return
   elseif maybe_completion.kind == "delete" then
     log:debug(string.format("NES: received delete completion -> %d lines", #(maybe_completion.lines or {})))
     self:handle_nes_delete(buffer, maybe_completion)
+    self.wants_polling = false
     return
   elseif maybe_completion.kind == "skip" then
     return
